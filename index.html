@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Controle de Dívidas - Estilo Organizze</title>
+  <style>
+    :root {
+      --bg: #1e1e2f;
+      --card: #2c2c3c;
+      --text: #e0e0e0;
+      --highlight: #4cb050;
+      --error: #e74c3c;
+      --font: 'Segoe UI', sans-serif;
+    }
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      padding: 20px;
+    }
+    h1 { text-align:center; margin-bottom:10px; }
+    .total-global {
+      text-align:center;
+      font-size:1.2em;
+      margin-bottom: 20px;
+      color: var(--highlight);
+    }
+    form {
+      background: var(--card);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+    }
+    input, select, button {
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:4px;
+    }
+    input, select {
+      background:#3a3a4a;
+      color: var(--text);
+    }
+    button {
+      background: var(--highlight);
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+    }
+    button:hover {
+      background: #3da849;
+    }
+    .mes-grupo {
+      margin-bottom: 30px;
+    }
+    .mes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom:8px;
+    }
+    .mes-titulo {
+      font-size: 1.1em;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .mes-total {
+      font-size: 0.95em;
+      color: var(--highlight);
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: var(--card);
+      padding:12px;
+      border-radius:6px;
+      margin-bottom:8px;
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap:wrap;
+    }
+    .info {
+      flex:1;
+    }
+    .info div { margin-bottom:4px; }
+    .categoria {
+      font-size:0.85em;
+      color:#aaa;
+    }
+    .delete {
+      background: var(--error);
+      color: #fff;
+      border: none;
+      padding:6px 10px;
+      border-radius:4px;
+      cursor:pointer;
+      margin-left:10px;
+    }
+    @media (max-width: 600px) {
+      li { flex-direction: column; align-items: flex-start; }
+      .delete { margin-top:6px; margin-left:0; width:100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Controle de Dívidas</h1>
+  <div class="total-global" id="totalGeral">Total geral: R$ 0,00</div>
+
+  <form id="form">
+    <input type="text" id="descricao" placeholder="Descrição" required>
+    <input type="number" id="valor" placeholder="Valor (R$)" required>
+    <input type="date" id="data" required>
+    <select id="categoria" required>
+      <option value="">Selecione a categoria</option>
+      <option>Cartão</option>
+      <option>Aluguel</option>
+      <option>Internet</option>
+      <option>Outros</option>
+    </select>
+    <button type="submit">Adicionar dívida</button>
+  </form>
+
+  <div id="lista"></div>
+
+  <script>
+    const form = document.getElementById('form');
+    const lista = document.getElementById('lista');
+    const totalGeral = document.getElementById('totalGeral');
+    let dividas = JSON.parse(localStorage.getItem('dividas')) || [];
+
+    const salvar = () => localStorage.setItem('dividas', JSON.stringify(dividas));
+    const formatBr = v => parseFloat(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    const agrupar = arr => {
+      return arr.reduce((g, d, i) => {
+        const dt = new Date(d.data);
+        const key = dt.toLocaleString('pt-BR',{month:'long',year:'numeric'});
+        if (!g[key]) g[key] = [];
+        g[key].push({ ...d, index: i });
+        return g;
+      }, {});
+    };
+
+    const render = () => {
+      lista.innerHTML = '';
+      const total = dividas.reduce((a,d) => a + parseFloat(d.valor), 0);
+      totalGeral.textContent = `Total geral: ${formatBr(total)}`;
+      const grupos = agrupar(dividas);
+
+      Object.entries(grupos).forEach(([mes, items]) => {
+        const container = document.createElement('div'); container.className = 'mes-grupo';
+        const header = document.createElement('div'); header.className = 'mes-header';
+        const title = document.createElement('div'); title.className = 'mes-titulo';
+        title.textContent = mes.charAt(0).toUpperCase()+mes.slice(1);
+        const monthTotal = items.reduce((a,d) => a + parseFloat(d.valor), 0);
+        const totalEl = document.createElement('div'); totalEl.className = 'mes-total';
+        totalEl.textContent = `Total: ${formatBr(monthTotal)}`;
+        header.append(title, totalEl);
+
+        const ul = document.createElement('ul');
+        items.forEach(d => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <div class="info">
+              <div><strong>${d.descricao}</strong></div>
+              <div>${formatBr(d.valor)} — ${d.data}</div>
+              <div class="categoria">Categoria: ${d.categoria}</div>
+            </div>
+          `;
+          const btn = document.createElement('button');
+          btn.textContent = 'Excluir';
+          btn.className = 'delete';
+          btn.onclick = () => { dividas.splice(d.index,1); salvar(); render(); };
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+
+        container.append(header, ul);
+        lista.appendChild(container);
+      });
+    };
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      dividas.push({
+        descricao: form.descricao.value,
+        valor: form.valor.value,
+        data: form.data.value,
+        categoria: form.categoria.value
+      });
+      salvar();
+      render();
+      form.reset();
+    });
+
+    render();
+  </script>
+</body>
+</html>
